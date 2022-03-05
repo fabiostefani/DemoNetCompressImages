@@ -22,6 +22,7 @@ namespace DemoNetCompressImages.Services
     public class CompressImagesService : ICompressImagesService
     {
         public long quality { get; set; }
+        private const string ExtensionPng = "png";
 
         public CompressImagesService()
         {
@@ -29,39 +30,22 @@ namespace DemoNetCompressImages.Services
         }
         
         public async Task CompressImage(IFormFile image)
+        {            
+            await File.WriteAllBytesAsync(MakePath($"original_{image.Name}", "jpg"), await ReadAllBytesFile(image));            
+
+            await SharpCompactJPG(image, MakePath($"ImageSharp_{image.Name}", "jpg"));                
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}", ExtensionPng), PngCompressionLevel.BestCompression);
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}2", ExtensionPng), PngCompressionLevel.DefaultCompression);
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L0", ExtensionPng), PngCompressionLevel.Level0);
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L1", ExtensionPng), PngCompressionLevel.Level1);
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L2", ExtensionPng), PngCompressionLevel.Level2);
+            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L5", ExtensionPng), PngCompressionLevel.Level5);
+            CompresswebP(image);
+        }
+
+        private string MakePath(string fileName, string extension)
         {
-            byte[] file = await ReadAllBytesFile(image);            
-            string path = Path.Combine("Images", $"original_{image.FileName}");
-            await File.WriteAllBytesAsync(path, file);
-            // CompresswebP(image);
-
-            using (var ms = new MemoryStream())
-            {
-                image.CopyTo(ms);
-                ms.Position = 0L;
-                SharpCompactJPG(ms, Path.Combine("Images", $"ImageSharp_{image.Name}.jpg"));                
-            }
-            using (var ms = new MemoryStream())
-            {
-                image.CopyTo(ms);
-                ms.Position = 0L;
-                SharpCompactPNG(ms, Path.Combine("Images", $"ImageSharp_{image.Name}.png"), PngCompressionLevel.BestCompression);
-            }            
-
-            using (var ms = new MemoryStream())
-            {
-                image.CopyTo(ms);
-                ms.Position = 0L;
-                SharpCompactPNG(ms, Path.Combine("Images", $"ImageSharp_{image.Name}2.png"), PngCompressionLevel.DefaultCompression);
-            }   
-
-            using (var ms = new MemoryStream())
-            {
-                image.CopyTo(ms);
-                ms.Position = 0L;
-                CoreCompact(ms, Path.Combine("Images", $"CoreCompact_{image.Name}2.png"));
-            }   
-            
+            return Path.Combine("Images", $"{fileName}.{extension}");
         }
 
         private async Task<byte[]> ReadAllBytesFile(IFormFile image)
@@ -86,91 +70,51 @@ namespace DemoNetCompressImages.Services
                 {
                     imageFactory.Load(image.OpenReadStream()) //carregando os dados da imagem
                                 .Format(new WebPFormat()) //formato
-                                .Quality(100) //parametro para não perder a qualidade no momento da compressão
-                                .Save(webPFileStream); //salvando a imagem
+                                .Quality(90) //parametro para não perder a qualidade no momento da compressão
+                                .Save(webPFileStream);
+
                 }
             }
 
         }
 
-        private void CompressMagickNet(IFormFile image)
+        public async Task SharpCompactJPG(IFormFile image, string path)
         {
-            // var snakewareLogo = new FileInfo(Path.Combine("Images", image.FileName));
-
-            // Console.WriteLine("Bytes before: " + snakewareLogo.Length);
-
-            // var optimizer = new ImageOptimizer();
-            // optimizer.LosslessCompress(snakewareLogo);
-
-            // snakewareLogo.Refresh();
-            // Console.WriteLine("Bytes after:  " + snakewareLogo.Length);
-
-            // using (MagickImage image = new MagickImage("input.svg"))
-            // {
-            // image.Scale(new Percentage(60));
-            // image.Write("output.png");
-            // }
-        }
-
-        public void SharpCompactJPG(Stream stream, string path)
-        {
-            // var filename = Path.Combine(path, "sharper.jpg");
-            // if (File.Exists(filename))
-            //     File.Delete(filename);
-
-            using var ms = new FileStream(path, FileMode.CreateNew);
-
-            var image = SixLabors.ImageSharp.Image.Load(stream);
-            image.Metadata.ExifProfile = null;
-            image.SaveAsJpeg(ms, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder()
+            using (var memoryStream = new MemoryStream())
             {
-                Quality = (int)quality,
-                Subsample = SixLabors.ImageSharp.Formats.Jpeg.JpegSubsample.Ratio420
-            });
+                image.CopyTo(memoryStream);
+                memoryStream.Position = 0L;                
+                using var ms = new FileStream(path, FileMode.CreateNew);
+
+                var imageSharp = SixLabors.ImageSharp.Image.Load(memoryStream);
+                imageSharp.Metadata.ExifProfile = null;
+                await imageSharp.SaveAsJpegAsync(ms, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder()
+                {
+                    Quality = (int)quality,
+                    Subsample = SixLabors.ImageSharp.Formats.Jpeg.JpegSubsample.Ratio444                
+                });
+            }   
         }
 
-        public void SharpCompactPNG(Stream stream, string path, PngCompressionLevel level)
+        public async Task SharpCompactPNG(IFormFile image, string path, PngCompressionLevel level)
         {
-            // var filename = Path.Combine(path, "sharper.png");
-            // if (File.Exists(filename))
-            //     File.Delete(filename);
-
-            using var ms = new FileStream(path, FileMode.CreateNew);
-
-            var image = SixLabors.ImageSharp.Image.Load(stream);
-            image.Metadata.ExifProfile = null;
-
-            image.SaveAsPng(ms, new SixLabors.ImageSharp.Formats.Png.PngEncoder()
+            using (var memoryStream = new MemoryStream())
             {
-                CompressionLevel = level,
-            ColorType = SixLabors.ImageSharp.Formats.Png.PngColorType.Palette,
-            });
+                image.CopyTo(memoryStream);
+                memoryStream.Position = 0L;                
+                using var ms = new FileStream(path, FileMode.CreateNew);
+
+                var imageSharp = SixLabors.ImageSharp.Image.Load(memoryStream);
+                imageSharp.Metadata.ExifProfile = null;            
+
+                await imageSharp.SaveAsPngAsync(ms, new SixLabors.ImageSharp.Formats.Png.PngEncoder()
+                {
+                    CompressionLevel = level,
+                    ColorType = SixLabors.ImageSharp.Formats.Png.PngColorType.Palette,                
+                });
+            }           
         }
 
-        public void CoreCompact(Stream stream, string path)
-        {
-            // var filename = Path.Combine(path, "coredrawing.jpg");
-            // if (File.Exists(filename))
-            //     File.Delete(filename);
-
-
-            using var image = new Bitmap(System.Drawing.Image.FromStream(stream));
-            using var graphics = Graphics.FromImage(image);
-            graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            graphics.SmoothingMode = SmoothingMode.HighQuality;
-            graphics.CompositingMode = CompositingMode.SourceCopy;
-            graphics.DrawImageUnscaled(image, 0, 0);
-            graphics.Flush(FlushIntention.Sync);
-
-            using var ms = new FileStream(filename, FileMode.CreateNew);
-            var qualityParamId = Encoder.Quality;
-            var encoderParameters = new EncoderParameters(1);
-            encoderParameters.Param[0] = new EncoderParameter(qualityParamId, quality);
-            var codec = ImageCodecInfo.GetImageDecoders()
-                .FirstOrDefault(codecx => codecx.FormatID == ImageFormat.Jpeg.Guid);
-            image.Save(ms, codec, encoderParameters);
-        }
+        
     }
 }
