@@ -1,19 +1,6 @@
-
-using System;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Diagnostics;
 using ImageProcessor;
 using ImageProcessor.Plugins.WebP.Imaging.Formats;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 
@@ -31,16 +18,27 @@ namespace DemoNetCompressImages.Services
         
         public async Task CompressImage(IFormFile image)
         {            
-            await File.WriteAllBytesAsync(MakePath($"original_{image.Name}", "jpg"), await ReadAllBytesFile(image));            
-
+            await File.WriteAllBytesAsync(MakePath($"original_{image.Name}", "jpg"), await ReadAllBytesFile(image));
+            Stopwatch stopWatch = new Stopwatch();
+            stopWatch.Start();            
             await SharpCompactJPG(image, MakePath($"ImageSharp_{image.Name}", "jpg"));                
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}", ExtensionPng), PngCompressionLevel.BestCompression);
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}2", ExtensionPng), PngCompressionLevel.DefaultCompression);
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L0", ExtensionPng), PngCompressionLevel.Level0);
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L1", ExtensionPng), PngCompressionLevel.Level1);
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L2", ExtensionPng), PngCompressionLevel.Level2);
-            await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L5", ExtensionPng), PngCompressionLevel.Level5);
+            stopWatch.Stop();            
+            TimeSpan ts = stopWatch.Elapsed;
+            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+            Console.WriteLine("RunTime JPG " + elapsedTime);
+
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}", ExtensionPng), PngCompressionLevel.BestCompression);
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}2", ExtensionPng), PngCompressionLevel.DefaultCompression);
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L0", ExtensionPng), PngCompressionLevel.Level0);
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L1", ExtensionPng), PngCompressionLevel.Level1);
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L2", ExtensionPng), PngCompressionLevel.Level2);
+            // await SharpCompactPNG(image, MakePath($"ImageSharp_{image.Name}L5", ExtensionPng), PngCompressionLevel.Level5);
+            stopWatch.Start();            
             CompresswebP(image);
+            stopWatch.Stop();            
+            ts = stopWatch.Elapsed;
+            elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
+            Console.WriteLine("RunTime WEBP " + elapsedTime);
         }
 
         private string MakePath(string fileName, string extension)
@@ -59,23 +57,17 @@ namespace DemoNetCompressImages.Services
 
         private void CompresswebP(IFormFile image)
         {
-            using (var stream = new FileStream(Path.Combine("Images", image.FileName), FileMode.Create))
-            {
-                image.CopyTo(stream);
-            }
-
             using (var webPFileStream = new FileStream(Path.Combine("Images", $"webp_{image.Name}.webp"), FileMode.Create))
             {
                 using (ImageFactory imageFactory = new ImageFactory(preserveExifData: false))
                 {
                     imageFactory.Load(image.OpenReadStream()) //carregando os dados da imagem
                                 .Format(new WebPFormat()) //formato
-                                .Quality(90) //parametro para não perder a qualidade no momento da compressão
+                                .Quality(100)                                 
                                 .Save(webPFileStream);
 
                 }
             }
-
         }
 
         public async Task SharpCompactJPG(IFormFile image, string path)
